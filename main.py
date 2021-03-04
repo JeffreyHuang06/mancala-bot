@@ -6,7 +6,7 @@ inputs = ()
 with open("board.txt") as fin:
     inputs = [int(i) for i in fin.read().split()]
 
-solver = Solver(inputs)
+solver = Solver(inputs, debug=2)
 res = solver.solve(depth = 5)
 
-print(res)
+print(f"Best move: {res}")
