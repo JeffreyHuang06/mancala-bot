@@ -1,8 +1,20 @@
 import builtins
-from os import stat
 from typing import List
+from debug import visualize
 
 ListSizeError = Exception("List size must be even number")
+
+class Answer:
+    def __init__(self, bst_move: int):
+        self.best_move = bst_move
+    
+    def with_full_sim(self, full_sim, moves: List[int]):
+        def exec_full_sim():
+            full_sim(moves)
+
+        self.full_sim = exec_full_sim
+
+        return self
 
 class Solver:
     def __init__(self, inputs: List[int], debug=0):
@@ -76,6 +88,7 @@ class Solver:
         """
         shape: [next_player, post-simulated board]
         types: list[int, list[int]]
+        out_shape: [pos, inputs]
         """
         # whos turn it is
         next_player = 1 - player # negates the player
@@ -109,6 +122,21 @@ class Solver:
                 break
 
         return [next_player, inputs]
+
+    def full_sim(self, moves: List[int]):
+        states = [self.inputs]
+
+        newstate = self.inputs
+        next_player = 1
+        
+        for move in moves:
+            # print(move)
+            next_player, newstate = self.simulate(move, newstate.copy(), next_player)
+            # print(next_player)
+            states.append(newstate.copy())
+        
+        for state in states:
+            visualize(state)
 
     # minimax
     def tree_search(self, inputs: List[int], maximizing_player: int, depth: int, moves: List[int]):
@@ -181,5 +209,6 @@ class Solver:
             print(f"outcomes: {outcomes}")
             print(f"best outcome: {best_outcome}")
             print()
+    
+        return Answer(best_pos).with_full_sim(self.full_sim, best_outcome[1]) 
 
-        return best_pos
