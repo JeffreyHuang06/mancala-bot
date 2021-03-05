@@ -1,6 +1,9 @@
 import builtins
 from typing import List
-from debug import visualize
+from debug import visualize, disp_list
+from threading import Thread
+from multiprocessing import Process, Queue
+from queue import Queue as default_Queue
 
 ListSizeError = Exception("List size must be even number")
 
@@ -33,7 +36,7 @@ class Solver:
             print(f"p2_range: {self.p2_range}")
             print(f"inputs: {self.inputs}")
             print()
-    
+
     @staticmethod
     def resize_board(board: List[int]):
         """
@@ -80,7 +83,7 @@ class Solver:
         
         elif who == 0:
             return ret if ret != self.mid else self.mid+1 # to make sure not in other persons thing
-    
+
     def check_done(self, inputs: List[int]):
         return set(inputs[1:self.mid] + inputs[self.mid + 1:]) == set([0])
 
@@ -178,37 +181,192 @@ class Solver:
 
         return score
 
-    def solve(self, depth: int = 1):
-        # set up the first moves
+    # interface funcs
+    def get_first_moves(self):
         first_move = []
         for pos in self.p1_range:
             first_move.append(
-                (self.simulate(
-                        pos,
-                        self.inputs.copy(),
-                        1
-                    ), pos)
+                (self.simulate(pos, self.inputs.copy(), 1), pos)
             )
         first_move = list(filter(lambda x: x[0][0] != -1, first_move))
 
-        outcomes = [
+        self.first_move = first_move
+
+    def get_outcomes(self):
+        self.outcomes = [
             self.tree_search(
                 inputs=move[1],
                 maximizing_player=move[0],
-                depth=depth-1,
+                depth=self.depth-1,
                 moves=[pos])
-            for move, pos in first_move
+            for move, pos in self.first_move
         ]
 
-        best_outcome = max(outcomes, key=lambda x: x[0])
+    def solve(self, depth: int = 1):
+        self.depth = depth
+
+        # set up the first moves
+        self.get_first_moves()
+
+        self.get_outcomes()
+
+        best_outcome = max(self.outcomes, key=lambda x: x[0])
         # get correctsponding move
         best_pos = best_outcome[1][0]
 
         if self.debug > 0:
-            print(f"first_moves: {first_move}")
-            print(f"outcomes: {outcomes}")
+            print("first_moves: "); disp_list(self.first_move)
+            print("outcomes: "); disp_list(self.outcomes)
             print(f"best outcome: {best_outcome}")
             print()
-    
+
         return Answer(best_pos).with_full_sim(self.full_sim, best_outcome[1]) 
 
+
+class Solver_MT (Solver):
+    def __init__(self, inputs: List[int], debug=0):
+        super().__init__(inputs, debug)
+
+    def simulate(self, pos: int, inputs: List[int], player: int, q=None):
+        """
+        shape: [next_player, post-simulated board]
+        types: list[int, list[int]]
+        out_shape: [pos, inputs]
+        """
+        # stores original pos
+        original_pos = pos
+        # whos turn it is
+        next_player = 1 - player # negates the player
+
+        if inputs[pos] == 0:
+            if q != None: q.put([-1, inputs])
+            return [-1, inputs]
+
+        # carry the thing
+        carry = inputs[pos]
+        inputs[pos] = 0
+
+        while True:
+            while carry != 0:
+                pos = self.next(pos, player)
+
+                # deposit an item
+                carry -= 1
+                inputs[pos] += 1
+
+            # if doposited on empty or on the opponents field
+            # if opponent, then check for field 0, else home field
+            if pos == self.mids[player]:
+                next_player = player
+                break
+
+            elif inputs[pos] != 1:
+                carry = inputs[pos]
+                inputs[pos] = 0
+
+            else:
+                break
+        
+        if q != None:
+            q.put([next_player, inputs, original_pos])
+
+        return [next_player, inputs]
+
+    # minimax
+    def tree_search(self, inputs: List[int], maximizing_player: int, depth: int, moves: List[int], q=None):
+        """
+        input_shape: inputs, moves
+        output_shape(score): [score, moves]
+            case-maximizing_player==1: None, will get filtered out
+        """
+        if maximizing_player == -1:
+            if q != None:
+                q.put(None)
+
+            return None
+
+        # terminal case
+        if depth == 0:
+            # print(inputs[self.mid] - inputs[0])
+            if q != None:
+                q.put((inputs[self.mid] - inputs[0], moves))
+
+            return (
+                inputs[self.mid] - inputs[0],
+                moves
+            )
+        
+        # thread this
+        possibilities = [self.simulate(pos=pos, inputs=inputs.copy(), player=maximizing_player) for pos in [self.p2_range, self.p1_range][maximizing_player]]
+
+        if maximizing_player == 1:
+            searched = [self.tree_search(inputs=p[1], maximizing_player=p[0], depth=depth - 1, moves=moves + [ind+1]) for ind, p in enumerate(possibilities)]
+            searched = list(filter(lambda x: x != None, searched))
+            score = max(searched, key=lambda x: x[0])
+        
+        else:
+            searched = [self.tree_search(inputs=p[1], maximizing_player=p[0], depth=depth - 1, moves=moves + [ind+1]) for ind, p in enumerate(possibilities)]
+            searched = list(filter(lambda x: x != None, searched))
+
+            score = min(searched, key=lambda x: x[0])
+        
+        if self.debug > 1:
+            print("searched:", searched)
+            print("depth", depth)
+            print("mp:", maximizing_player)
+            print("score", score, '\n')
+
+        # THREAD
+        if q != None:
+            q.put(score)
+
+        return score
+
+    # interface funcs
+    def get_first_moves(self):
+        first_move = []
+
+        # do threading
+        threads = []
+        q = default_Queue()
+        for pos in self.p1_range:
+            t = Thread(target=self.simulate, args=(
+                pos, self.inputs.copy(), 1, q))
+            threads.append(t)
+            t.start()
+        for thread in threads:
+            thread.join()
+        for thread in threads:
+            next_player, inputs, pos = q.get()
+            first_move.append(([next_player, inputs], pos))
+
+        first_move = list(filter(lambda x: x[0][0] != -1, first_move))
+
+        self.first_move = first_move
+
+    def get_outcomes(self):
+        outcomes = []
+
+        procs = []
+        q = Queue()
+        for move, pos in self.first_move:
+            proc = Process(target=self.tree_search, args=(
+                move[1], move[0], self.depth-1, [pos], q))
+            procs.append(proc)
+            proc.start()
+
+        threads_completed = 0
+        for proc in procs:
+            proc.join()
+
+            if self.debug > 0:
+                threads_completed += 1
+                print(f"Thread {threads_completed} Joined")
+
+        if self.debug > 0:
+            print()
+
+        for proc in procs:
+            outcomes.append(q.get())
+        
+        self.outcomes = outcomes

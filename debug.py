@@ -14,3 +14,9 @@ def visualize(board: List[int]):
     for i in vis:
         print(i)
     print()
+
+def disp_list(lis):
+    for elem in lis:
+        print(elem)
+    
+    print()
