@@ -84,8 +84,37 @@ class Solver:
         elif who == 0:
             return ret if ret != self.mid else self.mid+1 # to make sure not in other persons thing
 
+    def check_complete(self, inputs: List[int]):
+        return set(inputs[1:self.mid] + inputs[self.mid + 1:-1]) == set([0])
+
     def check_done(self, inputs: List[int]):
-        return set(inputs[1:self.mid] + inputs[self.mid + 1:]) == set([0])
+        # check if theres all 0 on a thing
+        return set(inputs[1:self.mid]) == set([0]) or set(inputs[self.mid + 1:-1]) == set([0])
+
+    def terminal_allocate(self, inputs: List[int], player: int):
+        if player == 1:
+            # get the score
+            score = sum(inputs[1:self.mid])
+
+            # add to player
+            inputs[self.mid] += score
+
+            # remove all from the field
+            for i in range(1, self.mid): inputs[i] = 0
+
+            return inputs
+        
+        else:
+            # get the score
+            score = sum(inputs[self.mid + 1:-1])
+
+            # add to player
+            inputs[0] += score
+
+            # remove all from the field
+            for i in range(self.mid+1, self.length-1): inputs[i] = 0
+
+            return inputs
 
     def simulate(self, pos: int, inputs: List[int], player: int):
         """
@@ -96,8 +125,12 @@ class Solver:
         # whos turn it is
         next_player = 1 - player # negates the player
 
+        # check if this is invalid
         if inputs[pos] == 0:
-            return [-1, inputs]
+            # terminal case
+            if self.check_done(inputs): return [next_player, self.terminal_allocate(inputs.copy(), player)]
+
+            else: return [-1, inputs]
 
         # carry the thing
         carry = inputs[pos]
@@ -142,6 +175,7 @@ class Solver:
             visualize(state)
 
     # minimax
+    # TODO: alpha beta pruning
     def tree_search(self, inputs: List[int], maximizing_player: int, depth: int, moves: List[int]):
         """
         input_shape: inputs, moves
@@ -152,7 +186,7 @@ class Solver:
             return None
 
         # terminal case
-        if depth == 0:
+        if depth == 0 or self.check_complete(inputs):
             # print(inputs[self.mid] - inputs[0])
             return (
                 inputs[self.mid] - inputs[0],
@@ -171,6 +205,7 @@ class Solver:
 
             searched = [self.tree_search(inputs=p[1], maximizing_player=p[0], depth=depth - 1, moves=moves + [ind+1]) for ind, p in enumerate(possibilies)]
             searched = list(filter(lambda x: x != None, searched))
+
             score = min(searched, key=lambda x: x[0])
         
         if self.debug > 1:
@@ -224,6 +259,10 @@ class Solver:
 
 
 class Solver_MT (Solver):
+    """
+    Multiprocessing, does not support alpha-beta pruning
+    """
+
     def __init__(self, inputs: List[int], debug=0):
         super().__init__(inputs, debug)
 
