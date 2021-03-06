@@ -12,6 +12,7 @@ pip install requirements.txt
 ## To run
 
 - Requires at least python 3.8
+- Recommended to use pypy
 
 ### MacOS
 
@@ -19,8 +20,20 @@ pip install requirements.txt
 python3 main.py
 ```
 
+or 
+
+```bash
+pypy3 main.py
+```
+
 ### Windows
 
 ```bash
 python main.py
+```
+
+or 
+
+```bash
+pypy main.py
 ```
