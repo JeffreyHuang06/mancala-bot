@@ -1,4 +1,3 @@
-from scanf import scanf
 from solve import Solver, Solver_MT
 
 inputs = ()
