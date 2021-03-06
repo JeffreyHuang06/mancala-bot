@@ -1,4 +1,5 @@
 from typing import List
+from exceptions import DeprecationError
 
 def visualize(board: List[int]):
     length = len(board)
@@ -20,3 +21,9 @@ def disp_list(lis):
         print(elem)
     
     print()
+
+def depr_check():
+    msg = str(input("This class is currently deprecated, would you like to continue? (Y/n) "))
+
+    if msg != "Y":
+        raise DeprecationError

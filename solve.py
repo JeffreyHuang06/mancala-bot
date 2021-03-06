@@ -1,11 +1,10 @@
 import builtins
 from typing import List
-from debug import visualize, disp_list
+from debug import visualize, disp_list, depr_check
 from threading import Thread
 from multiprocessing import Process, Queue
 from queue import Queue as default_Queue
-
-ListSizeError = Exception("List size must be even number")
+from exceptions import ListSizeError
 
 class Answer:
     def __init__(self, bst_move: int):
@@ -260,10 +259,13 @@ class Solver:
 
 class Solver_MT (Solver):
     """
-    Multiprocessing, does not support alpha-beta pruning
+    (Deprecated) Multiprocessing, does not support alpha-beta pruning
     """
 
     def __init__(self, inputs: List[int], debug=0):
+        # deprecation
+        depr_check()
+
         super().__init__(inputs, debug)
 
     def simulate(self, pos: int, inputs: List[int], player: int, q=None):
